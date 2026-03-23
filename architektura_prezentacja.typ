@@ -251,6 +251,142 @@
 	)
 ]
 
+// ─── Wizualizacja CNN Enkodera (lejek warstw) ───────────
+
+#let cnn-encoder-viz() = {
+	let H = 82pt
+	let layer(top-lbl, btm-lbl, rw, rh, col) = box(height: H, width: rw + 10pt)[
+		#align(bottom + center)[
+			#stack(dir: ttb, spacing: 1pt,
+				text(size: 5.5pt, weight: "bold", fill: col.darken(20%))[#top-lbl],
+				rect(width: rw, height: rh, radius: 2pt,
+					fill: col.lighten(70%),
+					stroke: (paint: col, thickness: 0.9pt)),
+				text(size: 5pt, fill: muted)[#btm-lbl],
+			)
+		]
+	]
+	let arr = box(height: H, width: 12pt)[
+		#align(bottom + center)[
+			#pad(bottom: 20pt)[#text(size: 10pt, fill: muted)[→]]
+		]
+	]
+	align(center)[
+		#stack(dir: ltr, spacing: 0pt,
+			layer([Input], [22 ch \ 104×50], 30pt, 30pt, sage),
+			arr,
+			layer([Conv1 \ GN+ReLU], [64 ch \ 52×25], 24pt, 37pt, teal.lighten(10%)),
+			arr,
+			layer([Conv2 \ GN+ReLU], [128 ch \ 26×13], 18pt, 44pt, teal),
+			arr,
+			layer([Conv3 \ GN+ReLU], [256 ch \ 13×7], 14pt, 50pt, teal.darken(15%)),
+			arr,
+			layer([Conv4 \ GN+ReLU], [512 ch \ 7×4], 10pt, 56pt, navy),
+			arr,
+			layer([Transf. \ 2L 4H], [512D], 24pt, 50pt, navy.darken(10%)),
+			arr,
+			layer([#sym.mu / #sym.sigma \ latent], [$z in RR^128$], 22pt, 40pt, rgb("#7755cc")),
+		)
+	]
+}
+
+// ─── Wizualizacja przestrzeni latentnej (p vs q) ─────────
+
+#let latent-viz() = align(center)[
+	#block(width: 230pt, height: 70pt, clip: false)[
+		#place(left + horizon)[
+			#rect(width: 110pt, height: 58pt, radius: 999pt,
+				fill: sage.lighten(80%), stroke: (paint: sage, thickness: 1.3pt))
+		]
+		#place(right + horizon)[
+			#rect(width: 110pt, height: 58pt, radius: 999pt,
+				fill: teal.lighten(75%), stroke: (paint: teal, thickness: 1.3pt))
+		]
+		#place(center + horizon)[
+			#rect(width: 32pt, height: 46pt, radius: 999pt,
+				fill: rgb("#d8f0e8").transparentize(30%), stroke: none)
+		]
+		#place(center + horizon, dy: -12pt)[
+			#text(size: 9pt, fill: rgb("#7755cc"), weight: "bold")[←]
+		]
+		#place(center + horizon, dy: -22pt)[
+			#text(size: 6pt, fill: rgb("#6644aa"), weight: "bold")[min KL]
+		]
+		#place(left + horizon, dx: 6pt)[
+			#text(size: 6.5pt, weight: "bold", fill: sage.darken(30%))[p(z | c) \ #text(weight: "regular", style: "italic")[prior]]
+		]
+		#place(right + horizon, dx: -68pt)[
+			#text(size: 6.5pt, weight: "bold", fill: teal.darken(30%))[q(z | x, c) \ #text(weight: "regular", style: "italic")[posterior]]
+		]
+		#place(center + horizon, dy: 10pt)[
+			#text(size: 5.5pt, fill: rgb("#6644aa"), style: "italic")[zbliżanie]
+		]
+	]
+	#v(2pt)
+	#text(size: 6.5pt, fill: muted, style: "italic")[Trening: min KL(q ∥ p) — posterior zbliża się do prioru]
+]
+
+// ─── Diagram przepływu architektury ──────────────────────
+
+#let arch-flow-diagram() = {
+	let fb-prior(body) = block(
+		width: 100%, inset: (x: 5pt, y: 4pt), radius: 5pt,
+		fill: sage.lighten(85%), stroke: (paint: sage, thickness: 0.9pt),
+		[#set text(size: 7.5pt, weight: "bold", fill: sage.darken(22%))
+		 #align(center)[#body]]
+	)
+	let fb-enc(body) = block(
+		width: 100%, inset: (x: 5pt, y: 4pt), radius: 5pt,
+		fill: teal.lighten(85%), stroke: (paint: teal, thickness: 0.9pt),
+		[#set text(size: 7.5pt, weight: "bold", fill: teal.darken(22%))
+		 #align(center)[#body]]
+	)
+	let fb-dec(body) = block(
+		width: 100%, inset: (x: 5pt, y: 4pt), radius: 5pt,
+		fill: amber.lighten(85%), stroke: (paint: amber, thickness: 0.9pt),
+		[#set text(size: 7.5pt, weight: "bold", fill: amber.darken(22%))
+		 #align(center)[#body]]
+	)
+	let arr = align(center + horizon)[#text(size: 13pt, fill: muted)[→]]
+
+	stack(spacing: 3pt,
+		block(width: 100%, radius: 6pt,
+			fill: sage.lighten(95%),
+			stroke: (paint: sage.lighten(40%), thickness: 0.6pt),
+			inset: (x: 6pt, y: 5pt))[
+			#text(size: 6pt, weight: "bold", fill: sage, tracking: 0.8pt)[PRIOR — generacja]
+			#v(3pt)
+			#grid(columns: (auto, auto, auto, auto, auto), gutter: 3pt, align: center + horizon,
+				fb-prior[$x_"cond"$ \ 8 liczb], arr,
+				fb-prior[Prior MLP \ 128→128], arr,
+				fb-prior[$mu_p, sigma_p$ \ $p(z|c)$],
+			)
+		],
+		align(center)[
+			#rect(inset: (x: 10pt, y: 2.5pt), radius: 5pt,
+				fill: rgb("#f0eefa"),
+				stroke: (paint: rgb("#7755cc"), thickness: 0.85pt))[
+				#text(size: 6.5pt, weight: "bold", fill: rgb("#6644aa"))[
+					↑ \ min KL(q‖p) — posterior zbliża się do prioru \ ↓
+				]
+			]
+		],
+		block(width: 100%, radius: 6pt,
+			fill: teal.lighten(95%),
+			stroke: (paint: teal.lighten(40%), thickness: 0.6pt),
+			inset: (x: 6pt, y: 5pt))[
+			#text(size: 6pt, weight: "bold", fill: teal, tracking: 0.8pt)[ENKODER + DEKODER — trening]
+			#v(3pt)
+			#grid(columns: (1fr, auto, 1.1fr, auto, 1fr, auto, 1fr), gutter: 3pt, align: center + horizon,
+				fb-enc[22 mapy \ SOL], arr,
+				fb-enc[CNN + \ Transformer], arr,
+				fb-enc[$mu_q, sigma_q$ \ Sample $z$], arr,
+				fb-dec[Dekoder \ → 22 mapy],
+			)
+		],
+	)
+}
+
 
 // ══════════════════════════════════════════════════════════
 // SLAJD 0 — OKŁADKA
@@ -417,6 +553,9 @@
 			- #text(weight: "bold")[Enkoder] — analizuje wejściowe mapy i streszcza je do krótkiego wektora liczb,
 			- #text(weight: "bold")[Prior] — przewiduje, jak ten skrót powinien wyglądać na podstawie samych warunków globalnych,
 			- #text(weight: "bold")[Dekoder] — na podstawie skrótu i warunków odtwarza pełne mapy.
+
+			#v(6pt)
+			#arch-flow-diagram()
 
 			#v(4pt)
 			#plain[Enkoder i dekoder działają jak para „koder–dekoder" w kompresji danych: jeden ściska, drugi rozpakowuje.]
@@ -696,6 +835,9 @@
 	subtitle: "Dwa uzupełniające się mechanizmy: CNN widzi lokalne wzorce, Transformer — globalne zależności.",
 )
 
+#cnn-encoder-viz()
+#v(8pt)
+
 #grid(
 	columns: (1fr, 0.9fr),
 	gutter: 16pt,
@@ -713,7 +855,7 @@
 			#plain[CNN działa jak lekarz przeglądający zdjęcie RTG — najpierw widzi ostre krawędzie, potem rozpoznaje większe struktury.]
 		]
 
-		#v(11pt)
+		#v(8pt)
 
 		#card("Część Transformer — globalne zależności", fill-color: navy)[
 			Mapy ze 512 kanałami są rozkładane w sekwencję tokenów (jak piksele w obrazie zamieniają się w „słowa"):
@@ -758,6 +900,11 @@
 	"Przestrzeń latentna i prior warunkowy",
 	subtitle: "Przestrzeń latentna to skompresowany opis stanu plazmy; prior wyraża, jakich opisów się spodziewamy.",
 )
+
+#align(center)[
+	#latent-viz()
+]
+#v(8pt)
 
 #grid(
 	columns: (0.95fr, 1.05fr),

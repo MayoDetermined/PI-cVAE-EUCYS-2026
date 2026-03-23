@@ -228,6 +228,40 @@
 	)
 ]
 
+// ─── Diagram transportu SOL ───────────────────────────────
+
+#let sol-transport-diagram() = {
+	let zone(lbl, sublbl, col) = block(
+		inset: (x: 8pt, y: 7pt), radius: 7pt,
+		fill: col.lighten(82%), stroke: (paint: col, thickness: 1pt),
+		[
+			#align(center)[
+				#text(size: 9pt, weight: "bold", fill: col.darken(20%))[#lbl]
+				#v(2pt)
+				#text(size: 7.5pt, fill: col.darken(30%), style: "italic")[#sublbl]
+			]
+		]
+	)
+	let flow-arrow(lbl) = align(center + horizon)[
+		#stack(dir: ttb, spacing: 0pt,
+			text(size: 7pt, fill: muted, style: "italic")[#lbl],
+			text(size: 14pt, fill: muted)[→],
+		)
+	]
+	grid(
+		columns: (auto, auto, auto, auto, auto, auto, auto),
+		column-gutter: 4pt,
+		align: center + horizon,
+		zone([Rdzeń], [$T > 10^8$ K \ źródło $Q$], navy),
+		flow-arrow[$Q_"parallel"$ →],
+		zone([SOL], [cienka warstwa \ brzegowa], amber),
+		flow-arrow[$Gamma, q$ ↓],
+		zone([Dywertor], [cel termiczny \ reaktora], teal),
+		flow-arrow[$Gamma_"wall"$ →],
+		zone([Ściana], [materiał \ reaktora], rgb("#7788aa")),
+	)
+}
+
 
 // ══════════════════════════════════════════════════════════
 // SLAJD 0 — OKŁADKA
@@ -961,6 +995,12 @@
 )
 
 #align(center)[
+	#sol-transport-diagram()
+]
+
+#v(10pt)
+
+#align(center)[
 	#grid(
 		columns: (auto, auto, auto, auto, auto),
 		column-gutter: 14pt,
@@ -972,7 +1012,7 @@
 	)
 ]
 
-#v(12pt)
+#v(8pt)
 
 #grid(
 	columns: (1fr, 1fr),
