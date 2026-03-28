@@ -1,0 +1,15 @@
+Wnioski po EUCYS do dalszej pracy:
+
+1. Martwe kanały są do naprawy
+
+2. Szczegółowe statystyki dotyczące map fizycznych
+
+3. Analiza Latent Space 
+
+4. Kroki czasowe i testy stabilności
+
+5. Dodanie zasady zachodania energii do loss f
+
+6. Ogarnąć dostęp do klastra jakiegoś
+
+7. Napisać o literaturę
