@@ -1,18 +1,16 @@
-"""
-PI-cVAE — pełna implementacja architektury z paperu
-"Physics-Informed Conditional Variational Autoencoder (PI-cVAE)
- dla Augmentacji Danych Plazmy Krawędziowej Tokamaka"
+"""PI-cVAE pełna implementacja.
 
-Kluczowe różnice względem train_cvae_solps.py:
-  - Normalizacja min-max [0,1] (nie log + z-score)
-  - Encoder: Conv2D 4×4 stride=2, kanały 10→32→64→128→256, LeakyReLU(0.2)
-  - Flatten → Transformer(x2) na wektorze 7168
-  - Condition MLP 8→32, concat z feature → Linear → μ, log σ²
-  - Decoder: Linear → 7×4×256, 4× (TransConv + ResBlock), sigmoid wyjście
-  - Bohm penalty wyłącznie na komórkach divertora (target boundary)
-  - Condition: log-skalowanie indeksów 3,4,5 (Dpuff, Npuff, Dcore) przed min-max
-  - PEŁNY JAKOBIAN: dywergencja we współrzędnych krzywoliniowych z crx.npy/cry.npy
-    (paper Sekcja 2.3.2 + Future Work pkt 2 — rygorystyczna strata PI)
+Model: Physics-Informed Conditional Variational Autoencoder dla edge-plasma SOLPS.
+
+Główne cechy:
+- min-max normalizacja do zakresu [0,1] (bez log + z-score)
+- Encoder: 4× Conv2D 4×4 str=2, kanały 10→32→64→128→256, LeakyReLU(0.2)
+- Flatten → Transformer×2 na wektorze 7168 (projekcja do d_model=512)
+- Condition MLP 8→32 - concat z cechami → Linear → μ/logσ²
+- Decoder: FC 7×4×256, 4× (ConvTranspose2d + ResBlock), interpolacja na wyjście 104×50
+- Bohm penalty tylko na komórkach dywertora (target mask)
+- Warunek: log10 indeksów [3,4,5] (Dpuff, Npuff, Dcore) przed min-max
+- Pełny jakobian transformacji krzywoliniowej z crx.npy/cry.npy (dywergencja 2.3.2)
 """
 
 import os
@@ -433,25 +431,20 @@ class PI_CVAE(nn.Module):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def compute_curvilinear_metrics(data_dir: str, device: str, nx: int = 104, ny: int = 50):
-    """
-    Oblicza pełne metryki siatki krzywoliniowej z plików crx.npy / cry.npy.
+    """Compute curvilinear grid metrics for PI physics losses.
 
-    Pliki crx/cry mają shape [nx, ny, 4] — 4 narożniki (R,Z) każdej komórki.
-    Obliczamy:
-        - Centroidy komórek R(i,j), Z(i,j)
-        - Pochodne cząstkowe ∂R/∂i, ∂R/∂j, ∂Z/∂i, ∂Z/∂j (centralne różnice)
-        - Jakobian √g = |∂R/∂i · ∂Z/∂j − ∂R/∂j · ∂Z/∂i|
-        - Kowariantny tensor metryczny g_αβ
-        - Kontrawariantny tensor metryczny g^αβ = (g_αβ)^{-1}
-        - Maskę komórek dywertora (target)
+    Loads `geometry/crx.npy` and `geometry/cry.npy` or falls back to a cartesian grid.
 
-    Formuła dywergencji (paper eq. w Sekcji 2.3.2):
-        ∇·A = (1/√g) · [∂(√g · A^i)/∂i  +  ∂(√g · A^j)/∂j]
+    Returns a dict of tensors (shape [1,1,nx,ny]):
+      - jacobian / inv_jacobian
+      - g11,g12,g22 (covariant), ginv11,ginv12,ginv22 (contravariant)
+      - target_mask (dyfwerter), R_center,Z_center
 
-    Kontrawariantne składowe A^i, A^j z kowariantnego A_poloidal (wzdłuż i):
-        A^i = g^{11}·A_i + g^{12}·A_j
-        A^j = g^{21}·A_i + g^{22}·A_j
-    Gdy znamy A jedynie wzdłuż pola (u_∥ ≈ poloidalny), przyjmujemy A_j ≈ 0.
+    Notes:
+      - crx/cry: [nx,ny,4] corner coordinates of each cell in (R,Z)
+      - central differences with edge replicating padding for derivatives
+      - g_αβ, g^αβ computed via standard metric inversion
+      - divergence uses the form from paper 2.3.2: div A = 1/√g * (∂i(√g A^i) + ∂j(√g A^j))
     """
     geo_dir = Path(data_dir) / "geometry"
     crx_path = geo_dir / "crx.npy"
@@ -758,6 +751,8 @@ def train(args):
                              num_workers=args.num_workers, pin_memory=pin)
 
     # --- Informacje o kanałach ---
+    # W X_field kolejność: [Te, Ti, na_0..na_{N-1}, ua_0..ua_{M-1}]
+    # na_count, ua_count wyciągamy bezpośrednio z datasetu, aby wspierać różne konfiguracje.
     na_count = ds_train.na.shape[-1]
     ua_count = ds_train.ua.shape[-1]
     in_channels = 2 + na_count + ua_count
@@ -770,8 +765,9 @@ def train(args):
         "na_indices": na_indices,
         "ua_indices": ua_indices,
         "ua_offset": 2 + na_count,
+        # species_pairs łączy na[i] z ua[i] dla obliczeń dywergencji strumienia
         "species_pairs": [(2 + j, 2 + na_count + j) for j in range(min(na_count, ua_count))],
-        "D1_pos_in_ua": 0,
+        "D1_pos_in_ua": 0,  # główny wektor prędkości w układzie (tu D1)
     }
 
     # Stats do denormalizacji — na GPU jako tensory
